@@ -20,6 +20,7 @@ def build_root_agent(
     user_context: Any,
     config: Dict[str, Any],
     domain_agents: Optional[List[Any]] = None,
+    knowledge_tool: Optional[Any] = None,
 ) -> Any:
     """
     Build the root Personal Assistant agent using Google ADK.
@@ -30,6 +31,7 @@ def build_root_agent(
         user_context: User context for authentication
         config: Agent configuration (model, etc.)
         domain_agents: Optional list of domain-specific sub-agents
+        knowledge_tool: Optional tool to query the knowledge base (documents)
 
     Returns:
         Configured ADK Agent instance
@@ -62,14 +64,27 @@ def build_root_agent(
         user_context=user_context,
     )
     
+    # Build tools list
+    tools_list = [mcp_toolset, load_memory]
+    
+    # Add knowledge base tool if provided
+    if knowledge_tool:
+        tools_list.append(knowledge_tool)
+        logger.info("Knowledge base tool added to agent")
+    
     instruction = """
 You are a helpful personal assistant integrated with Nodus OS.
 
 Your capabilities include:
-- Understanding user requests and intent
+- Understanding user requests and intent in multiple languages (Catalan, Spanish, English, etc.)
 - Accessing external tools via MCP (Model Context Protocol) Gateway
-- Using semantic memory (RAG) to recall past conversations
+- Using semantic memory (RAG) to recall past conversations by calling the `load_memory` tool
+- Searching the organization's knowledge base (uploaded documents) using `query_knowledge_base`
 - Providing clear, actionable responses
+
+When the user asks about specific documents, projects, or information:
+- ALWAYS use the `query_knowledge_base` tool to search for relevant information
+- Examples: "què saps de l'anàlisi funcional de Segalés?", "tell me about the project report"
 
 When you need to use external tools:
 - Use the available MCP tools through the gateway
@@ -78,18 +93,19 @@ When you need to use external tools:
 - Tools are prefixed with "mcp_" to indicate they come from MCP Gateway
 
 When answering questions:
-- Use your memory to recall relevant past conversations
+- Use your memory to recall relevant past conversations by calling the `load_memory` tool
+- Use `query_knowledge_base` to search for information in uploaded documents
 - Provide accurate, helpful information
 - If you don't know something, say so clearly
+- Always respond in the same language as the user's question
 """
     
-        # Build agent with MCP toolset and memory tool
-    # Note: memory_service is configured in the Runner, not in the Agent
+    # Build agent with all tools
     root_agent = Agent(
         name="personal_assistant",
         instruction=instruction,
         model=config.get("model", "gemini-2.0-flash-exp"),
-        tools=[mcp_toolset, load_memory],  # Added load_memory for RAG access
+        tools=tools_list,
         # sub_agents=domain_agents if domain_agents else None,
     )
     
@@ -97,5 +113,7 @@ When answering questions:
         "Root agent built successfully",
         agent_name=root_agent.name,
         has_mcp_toolset=True,
+        has_memory_tool=True,
+        has_knowledge_tool=bool(knowledge_tool),
     )
     return root_agent
