@@ -101,10 +101,15 @@ When you need to use external tools:
 - Always provide context about what you're doing
 - Tools are prefixed with "mcp_" to indicate they come from MCP Gateway
 
+🧠 MEMORY & CONTEXT RULES (CRITICAL):
+- At the START of EVERY conversation turn, ALWAYS call `load_memory` to recall recent context
+- This is ESSENTIAL to understand follow-up questions like "i quin productes fan?" (referring to previous topic)
+- After loading memory, you'll know what "they" or "it" or "fan" refers to from previous messages
+
 When answering questions:
-- Use your memory to recall relevant past conversations by calling the `load_memory` tool
-- Use `query_knowledge_base` to search for information in uploaded documents
-- Provide accurate, helpful information
+1. FIRST: Call `load_memory` to load conversation context (ALWAYS DO THIS)
+2. THEN: If asking about documents/projects, call `query_knowledge_base`
+3. FINALLY: Provide accurate, helpful information combining memory + knowledge base
 - If you don't know something, say so clearly
 """
     
