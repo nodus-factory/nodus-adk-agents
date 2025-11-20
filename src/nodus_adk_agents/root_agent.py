@@ -82,12 +82,12 @@ When answering questions:
 - If you don't know something, say so clearly
 """
     
-    # Build agent with memory service and MCP toolset
+        # Build agent with MCP toolset
+    # Note: memory_service is configured in the Runner, not in the Agent
     root_agent = Agent(
         name="personal_assistant",
         instruction=instruction,
         model=config.get("model", "gemini-2.0-flash-exp"),
-        memory_service=memory_service,
         tools=[mcp_toolset],
         # sub_agents=domain_agents if domain_agents else None,
     )
