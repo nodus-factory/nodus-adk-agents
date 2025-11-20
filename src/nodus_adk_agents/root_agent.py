@@ -51,6 +51,7 @@ def build_root_agent(
         ... )
     """
     from google.adk.agents.llm_agent import Agent
+    from google.adk.tools.load_memory_tool import load_memory
     from nodus_adk_runtime.adapters.nodus_mcp_toolset import NodusMcpToolset
     
     logger.info("Building root agent", model=config.get("model"))
@@ -82,13 +83,13 @@ When answering questions:
 - If you don't know something, say so clearly
 """
     
-        # Build agent with MCP toolset
+        # Build agent with MCP toolset and memory tool
     # Note: memory_service is configured in the Runner, not in the Agent
     root_agent = Agent(
         name="personal_assistant",
         instruction=instruction,
         model=config.get("model", "gemini-2.0-flash-exp"),
-        tools=[mcp_toolset],
+        tools=[mcp_toolset, load_memory],  # Added load_memory for RAG access
         # sub_agents=domain_agents if domain_agents else None,
     )
     
