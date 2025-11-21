@@ -14,13 +14,13 @@ import structlog
 logger = structlog.get_logger()
 
 
-def build_calendar_agent(mcp_toolset: Any, memory_service: Any) -> Any:
+def build_calendar_agent(mcp_toolset: Any = None, memory_service: Any = None) -> Any:
     """
     Build the calendar domain agent.
 
     Args:
-        mcp_toolset: MCP tools (calendar server tools)
-        memory_service: Memory service for context
+        mcp_toolset: MCP tools (calendar server tools) - optional for testing
+        memory_service: Memory service for context - optional for testing
 
     Returns:
         Configured calendar agent instance
@@ -32,29 +32,46 @@ def build_calendar_agent(mcp_toolset: Any, memory_service: Any) -> Any:
         - update_event: Modify existing event (requires HITL)
         - delete_event: Delete event (requires HITL)
     """
+    from google.adk.agents.llm_agent import Agent
+    
     logger.info("Building calendar agent")
 
-    # TODO: Implement actual ADK agent initialization
-    # from google.adk import Agent
-    # 
-    # calendar_agent = Agent(
-    #     name="calendar_agent",
-    #     instruction="""
-    #     You are a calendar management specialist that helps users:
-    #     - View and search calendar events
-    #     - Find optimal meeting times
-    #     - Create and manage events
-    #     
-    #     Always ask for confirmation before creating or modifying events.
-    #     Consider user's time zone and working hours preferences.
-    #     """,
-    #     tools=[mcp_toolset.filter_by_server("calendar"), memory_service],
-    # )
+    # Build calendar agent with ADK
+    # For testing: simplified agent without actual MCP tools
+    instruction = """
+You are a calendar management specialist that helps users with calendar-related tasks.
 
-    return {
-        "type": "domain_agent",
-        "name": "calendar_agent",
-        "status": "stub",
-        "capabilities": ["list", "find_slots", "create", "update", "delete"],
-    }
+Your capabilities:
+- Viewing and searching calendar events
+- Finding available time slots for meetings
+- Creating new events
+- Updating existing events
+- Managing event attendees
+
+IMPORTANT:
+- Always ask for confirmation before creating or modifying events
+- Consider user's time zone and working hours
+- Suggest optimal meeting times based on availability
+
+For testing purposes, you can simulate calendar operations.
+Example responses:
+- "Your next meeting is tomorrow at 10:00 AM"
+- "You have 3 free slots available this week: Monday 2-3pm, Wednesday 11am-12pm, Friday 4-5pm"
+- "I've scheduled a meeting for next Tuesday at 3pm"
+"""
+    
+    # Build tools list (empty for testing, MCP tools would go here)
+    tools_list = []
+    if mcp_toolset:
+        tools_list.append(mcp_toolset)
+    
+    calendar_agent = Agent(
+        name="calendar_agent",
+        instruction=instruction,
+        model="gemini-2.0-flash-exp",
+        tools=tools_list,
+    )
+    
+    logger.info("Calendar agent built successfully")
+    return calendar_agent
 

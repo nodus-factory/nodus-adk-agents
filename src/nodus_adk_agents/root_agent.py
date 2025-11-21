@@ -21,6 +21,8 @@ def build_root_agent(
     config: Dict[str, Any],
     domain_agents: Optional[List[Any]] = None,
     knowledge_tool: Optional[Any] = None,
+    enable_a2a: bool = True,
+    a2a_tools: Optional[List[Any]] = None,
 ) -> Any:
     """
     Build the root Personal Assistant agent using Google ADK.
@@ -58,6 +60,18 @@ def build_root_agent(
     
     logger.info("Building root agent", model=config.get("model"))
     
+    # A2A tools should be loaded before calling this function (to avoid event loop issues)
+    # They are passed as a parameter instead of being loaded here
+    if a2a_tools is None:
+        a2a_tools = []
+    
+    if a2a_tools:
+        logger.info(
+            "A2A tools received for root agent",
+            count=len(a2a_tools),
+            tools=[t.__name__ for t in a2a_tools],
+        )
+    
     # Create MCP toolset
     mcp_toolset = NodusMcpToolset(
         mcp_adapter=mcp_adapter,
@@ -71,6 +85,11 @@ def build_root_agent(
     if knowledge_tool:
         tools_list.append(knowledge_tool)
         logger.info("Knowledge base tool added to agent")
+    
+    # Add A2A tools loaded from config
+    if a2a_tools:
+        tools_list.extend(a2a_tools)
+        logger.info("A2A tools added to agent", count=len(a2a_tools))
     
     instruction = """
 You are a helpful personal assistant integrated with Nodus OS.
@@ -88,7 +107,21 @@ Your capabilities include:
 - Accessing external tools via MCP (Model Context Protocol) Gateway
 - Using semantic memory (RAG) to recall past conversations by calling the `load_memory` tool
 - Searching the organization's knowledge base (uploaded documents) using `query_knowledge_base`
+- Delegating specialized tasks to domain expert agents (A2A - Agent-to-Agent)
 - Providing clear, actionable responses
+
+🤝 DELEGATION & A2A (Agent-to-Agent) RULES:
+When you have access to sub-agents (domain specialists), you can delegate tasks:
+- **email_agent**: For email-related tasks (reading, composing, sending emails)
+  Example: "check my unread emails" → delegate to email_agent
+- **calendar_agent**: For calendar/scheduling tasks (events, meetings, availability)
+  Example: "schedule a meeting tomorrow at 3pm" → delegate to calendar_agent
+
+Delegation strategy:
+1. Identify if the task is domain-specific (email, calendar, CRM, etc.)
+2. If a specialized agent exists for that domain, delegate the task
+3. If the task requires multiple domains, you can delegate to multiple agents in parallel
+4. Compose the final response with results from delegated agents
 
 When the user asks about specific documents, projects, or information:
 - ALWAYS use the `query_knowledge_base` tool to search for relevant information
@@ -108,18 +141,31 @@ When you need to use external tools:
 
 When answering questions:
 1. FIRST: Call `load_memory` to load conversation context (ALWAYS DO THIS)
-2. THEN: If asking about documents/projects, call `query_knowledge_base`
-3. FINALLY: Provide accurate, helpful information combining memory + knowledge base
+2. THEN: Decide if you need to delegate to a specialist agent or query knowledge base
+3. FINALLY: Provide accurate, helpful information combining memory + knowledge/delegation results
 - If you don't know something, say so clearly
 """
     
-    # Build agent with all tools
+    # If enable_a2a and no domain_agents provided, create default test agents
+    if enable_a2a and not domain_agents:
+        from nodus_adk_agents.email_agent import build_email_agent
+        from nodus_adk_agents.calendar_agent import build_calendar_agent
+        
+        logger.info("No domain agents provided, creating default test agents for A2A")
+        domain_agents = [
+            build_email_agent(),
+            build_calendar_agent(),
+        ]
+        logger.info(f"Created {len(domain_agents)} default domain agents", 
+                   agents=[a.name for a in domain_agents])
+    
+    # Build agent with all tools and sub-agents for A2A
     root_agent = Agent(
         name="personal_assistant",
         instruction=instruction,
         model=config.get("model", "gemini-2.0-flash-exp"),
         tools=tools_list,
-        # sub_agents=domain_agents if domain_agents else None,
+        sub_agents=domain_agents if domain_agents else None,
     )
     
     logger.info(
@@ -128,5 +174,7 @@ When answering questions:
         has_mcp_toolset=True,
         has_memory_tool=True,
         has_knowledge_tool=bool(knowledge_tool),
+        has_sub_agents=bool(domain_agents),
+        sub_agents_count=len(domain_agents) if domain_agents else 0,
     )
     return root_agent
