@@ -178,3 +178,4 @@ if __name__ == "__main__":
     logger.info("Starting A2A Calculator Agent", endpoint=CALCULATOR_AGENT_CARD.endpoint)
     uvicorn.run(app, host="0.0.0.0", port=8003)
 
+

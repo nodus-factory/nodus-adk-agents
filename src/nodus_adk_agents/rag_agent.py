@@ -21,3 +21,4 @@ def build_rag_agent(mcp_toolset: Any, memory_service: Any) -> Any:
         "capabilities": ["query_documents", "ingest_documents", "search_knowledge"],
     }
 
+

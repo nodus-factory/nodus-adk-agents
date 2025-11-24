@@ -21,3 +21,4 @@ def build_memory_agent(memory_service: Any) -> Any:
         "capabilities": ["store_fact", "recall_fact", "search_timeline"],
     }
 
+

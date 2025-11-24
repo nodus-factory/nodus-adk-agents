@@ -21,3 +21,4 @@ def build_erp_agent(mcp_toolset: Any, memory_service: Any) -> Any:
         "capabilities": ["view_orders", "check_inventory", "create_invoice"],
     }
 
+

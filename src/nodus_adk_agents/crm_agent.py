@@ -21,3 +21,4 @@ def build_crm_agent(mcp_toolset: Any, memory_service: Any) -> Any:
         "capabilities": ["search_contacts", "view_deals", "log_activity"],
     }
 
+

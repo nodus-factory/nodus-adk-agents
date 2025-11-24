@@ -75,11 +75,26 @@ class A2AClient:
                     json=payload,
                     headers={"Content-Type": "application/json"},
                 )
+                
+                logger.info(
+                    "HTTP response received",
+                    status=response.status_code,
+                    content_type=response.headers.get("content-type"),
+                    body_preview=response.text[:200] if response.text else "Empty"
+                )
+                
                 response.raise_for_status()
                 result = response.json()
+                
+                logger.info(
+                    "JSON parsed",
+                    result_type=type(result).__name__,
+                    has_result="result" in result if result else False,
+                    has_error="error" in result if result else False
+                )
             
-            # Check for JSON-RPC error
-            if "error" in result:
+            # Check for JSON-RPC error (must be not null)
+            if result and result.get("error") is not None:
                 error = result["error"]
                 error_msg = f"A2A Error {error.get('code')}: {error.get('message')}"
                 logger.error("A2A error response", error=error)
@@ -91,6 +106,10 @@ class A2AClient:
                 method=method,
                 request_id=request_id,
             )
+            
+            if result is None:
+                logger.error("A2A response is None!")
+                return {}
             
             return result.get("result", {})
         

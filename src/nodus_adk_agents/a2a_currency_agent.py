@@ -1,6 +1,6 @@
 """
 Currency Converter Agent A2A Server
-Real exchange rates using Frankfurter API (free, no API key needed)
+Real exchange rates using ExchangeRate-API.com (free, no API key needed)
 """
 
 from datetime import datetime
@@ -15,8 +15,8 @@ logger = structlog.get_logger()
 
 app = FastAPI(title="Currency Converter Agent A2A")
 
-# Frankfurter API endpoint (free, no auth needed)
-FRANKFURTER_API = "https://api.frankfurter.app"
+# ExchangeRate-API endpoint (free, no auth needed, more stable than Frankfurter)
+EXCHANGE_API = "https://api.exchangerate-api.com/v4/latest"
 
 # Supported currencies
 SUPPORTED_CURRENCIES = [
@@ -32,7 +32,7 @@ async def get_exchange_rate(
     amount: float = 1.0,
 ) -> Dict[str, Any]:
     """
-    Get real-time exchange rate from Frankfurter API
+    Get real-time exchange rate from ExchangeRate-API
     
     Args:
         from_currency: Source currency code (e.g., "EUR")
@@ -56,19 +56,16 @@ async def get_exchange_rate(
         }
     
     try:
-        # Frankfurter API request
-        params = {
-            "from": from_currency,
-            "to": to_currency,
-            "amount": amount,
-        }
-        
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{FRANKFURTER_API}/latest", params=params)
+        # ExchangeRate-API request (simpler, more stable)
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            response = await client.get(f"{EXCHANGE_API}/{from_currency}")
             response.raise_for_status()
             data = response.json()
         
         # Parse response
+        if to_currency not in data["rates"]:
+            return {"error": f"Currency '{to_currency}' not found in rates"}
+        
         rate = data["rates"][to_currency]
         converted_amount = amount * rate
         
@@ -78,8 +75,8 @@ async def get_exchange_rate(
             "amount": amount,
             "rate": rate,
             "converted_amount": converted_amount,
-            "date": data["date"],
-            "source": "Frankfurter API",
+            "date": data.get("date", datetime.now().strftime("%Y-%m-%d")),
+            "source": "ExchangeRate-API",
             "timestamp": datetime.now().isoformat(),
         }
         
@@ -113,33 +110,34 @@ async def convert_multiple(
     to_currencies = [c.upper() for c in to_currencies]
     
     try:
-        # Frankfurter supports multiple target currencies
-        params = {
-            "from": from_currency,
-            "to": ",".join(to_currencies),
-            "amount": amount,
-        }
-        
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{FRANKFURTER_API}/latest", params=params)
+        # ExchangeRate-API returns all rates, filter what we need
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            response = await client.get(f"{EXCHANGE_API}/{from_currency}")
             response.raise_for_status()
             data = response.json()
         
-        # Parse response
+        # Parse response and filter requested currencies
         conversions = []
-        for currency, rate in data["rates"].items():
-            conversions.append({
-                "to_currency": currency,
-                "rate": rate,
-                "converted_amount": amount * rate,
-            })
+        for currency in to_currencies:
+            if currency in data["rates"]:
+                rate = data["rates"][currency]
+                conversions.append({
+                    "to_currency": currency,
+                    "rate": rate,
+                    "converted_amount": amount * rate,
+                })
+            else:
+                conversions.append({
+                    "to_currency": currency,
+                    "error": f"Currency '{currency}' not found",
+                })
         
         return {
             "from_currency": from_currency,
             "amount": amount,
             "conversions": conversions,
-            "date": data["date"],
-            "source": "Frankfurter API",
+            "date": data.get("date", datetime.now().strftime("%Y-%m-%d")),
+            "source": "ExchangeRate-API",
             "timestamp": datetime.now().isoformat(),
         }
         
@@ -157,7 +155,7 @@ async def root():
     """Agent Card - A2A Discovery"""
     return {
         "name": "currency_agent",
-        "description": "Real-time currency conversion using Frankfurter API",
+        "description": "Real-time currency conversion using ExchangeRate-API (stable, free)",
         "version": "1.0.0",
         "capabilities": {
             "convert": {
