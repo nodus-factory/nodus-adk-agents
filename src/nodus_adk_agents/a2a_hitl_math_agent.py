@@ -139,6 +139,7 @@ async def a2a_handler(request: Request):
         )
 
 
+@app.get("/")
 @app.get("/discover")
 async def discover():
     """Return agent capabilities card"""
