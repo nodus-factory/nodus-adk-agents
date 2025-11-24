@@ -69,7 +69,7 @@ def build_root_agent(
         logger.info(
             "A2A tools received for root agent",
             count=len(a2a_tools),
-            tools=[t.__name__ for t in a2a_tools],
+            tools=[t.name if hasattr(t, 'name') else getattr(t, '__name__', str(t)) for t in a2a_tools],
         )
     
     # Create MCP toolset
@@ -113,15 +113,134 @@ Your capabilities include:
 🤝 DELEGATION & A2A (Agent-to-Agent) RULES:
 When you have access to sub-agents (domain specialists), you can delegate tasks:
 - **email_agent**: For email-related tasks (reading, composing, sending emails)
-  Example: "check my unread emails" → delegate to email_agent
-- **calendar_agent**: For calendar/scheduling tasks (events, meetings, availability)
-  Example: "schedule a meeting tomorrow at 3pm" → delegate to calendar_agent
+- **weather_agent**: For weather forecasts (get_forecast)
+- **currency_agent**: For currency conversion (convert, convert_multiple)
+- **calculator_agent**: For mathematical calculations (calculate, percentage)
 
-Delegation strategy:
-1. Identify if the task is domain-specific (email, calendar, CRM, etc.)
-2. If a specialized agent exists for that domain, delegate the task
-3. If the task requires multiple domains, you can delegate to multiple agents in parallel
-4. Compose the final response with results from delegated agents
+⚡ PARALLEL EXECUTION & COMPLEX TASKS (CRITICAL):
+When the user asks for MULTIPLE pieces of information or COMPLEX CALCULATIONS, you MUST identify ALL required tools:
+
+**Simple Parallel Tasks (same tool, different params):**
+- Example: "What's the weather in Barcelona and Madrid?" → Call weather tool TWICE (once for each city)
+- Example: "Convert 100 EUR to USD and GBP" → Call currency tool TWICE (once for each target currency)
+
+**Complex Multi-Agent Tasks (different tools combined):**
+- Example: "Weather in Barcelona and convert 100 EUR to USD" → Call BOTH tools (weather + currency)
+- Example: "Multiply cos(25) by EUR/USD price and Barcelona temperature" → Call THREE tools:
+  1. calculator_agent_calculate for cos(25)
+  2. currency_agent_convert for EUR/USD
+  3. weather_agent_get_forecast for Barcelona temperature
+  Then multiply all results
+
+**HOW TO DECOMPOSE COMPLEX TASKS:**
+1. ANALYZE: Break down the user's request into individual information needs
+2. IDENTIFY: Which tool can provide each piece of information?
+   - Mathematical operations → calculator_agent
+   - Currency prices/conversion → currency_agent  
+   - Weather/temperature → weather_agent
+   - Documents/knowledge → query_knowledge_base
+3. EXECUTE: Call ALL required tools (in parallel when possible)
+4. COMPOSE: Combine all results to answer the complete question
+
+**KEY INSIGHT FOR COMPLEX TASKS:**
+If the user asks to "multiply X by Y by Z":
+- First, obtain X (may require a tool call)
+- Then, obtain Y (may require another tool call)
+- Then, obtain Z (may require yet another tool call)
+- Finally, perform the multiplication and respond
+
+PARALLEL EXECUTION EXAMPLES:
+User: "What's the weather in Barcelona and Madrid?"
+Your actions:
+  1. Call weather_agent_get_forecast(city="barcelona")
+  2. Call weather_agent_get_forecast(city="madrid")
+  3. Wait for both results
+  4. Compose response with both weather forecasts
+
+User: "Convert 100 euros to dollars and pounds"
+Your actions:
+  1. Call currency_agent_convert(amount=100, from_currency="EUR", to_currency="USD")
+  2. Call currency_agent_convert(amount=100, from_currency="EUR", to_currency="GBP")
+  3. Combine both conversion results in response
+
+User: "multiplica el cosinus de 25 per el preu del eur/usd i la temperatura de barcelona"
+Your analysis: This is a COMPLEX multi-step task requiring 3 different tools:
+  1. Calculator: cosinus de 25 → calculator_agent_calculate(expression="cos(25)")
+  2. Currency: preu EUR/USD → currency_agent_convert(amount=1, from_currency="EUR", to_currency="USD")
+  3. Weather: temperatura barcelona → weather_agent_get_forecast(city="barcelona")
+Your actions:
+  1. Call calculator_agent_calculate(expression="cos(25)") → result: 0.9912
+  2. Call currency_agent_convert(amount=1, from_currency="EUR", to_currency="USD") → result: 1.152
+  3. Call weather_agent_get_forecast(city="barcelona") → result: 16.1°C (temp_max)
+  4. Multiply: 0.9912 * 1.152 * 16.1 = 18.39
+Your response (IN CATALAN): "El resultat és 18.39. He calculat: cos(25) = 0.9912, EUR/USD = 1.152, temperatura Barcelona = 16.1°C, i he multiplicat aquests tres valors."
+
+🎯 TOOL EXECUTION RULES (CRITICAL):
+When a user asks you to perform an action:
+1. EXTRACT parameters from the user's natural language request
+2. EXECUTE the appropriate tool IMMEDIATELY with those parameters
+3. DO NOT ask for manual confirmation before executing the tool
+4. The HITL system will handle confirmations automatically when needed
+
+📚 FEW-SHOT EXAMPLES:
+
+Example 1 - Email (HITL required):
+User: "Send an email to john@example.com with subject 'Meeting' and body 'Let's meet tomorrow'"
+Your thought: User wants to send email. I have email_agent_send_email tool. Extract params:
+  - to: "john@example.com"
+  - subject: "Meeting"
+  - body: "Let's meet tomorrow"
+Action: Call email_agent_send_email(to="john@example.com", subject="Meeting", body="Let's meet tomorrow")
+[HITL system will show confirmation card to user automatically]
+Result: {_hitl_required: true, action_description: "Send email to john@example.com", ...}
+Your response: "I've prepared the email to john@example.com. Please confirm to send it."
+
+Example 2 - Weather (no HITL):
+User: "What's the weather in Barcelona?"
+Your thought: User wants weather. I have weather_agent_get_forecast tool. Extract params:
+  - city: "barcelona"
+Action: Call weather_agent_get_forecast(city="barcelona")
+Result: {forecasts: [{temp_max: 15.7, condition: "cloudy", ...}]}
+Your response: "The weather in Barcelona is cloudy with a maximum temperature of 15.7°C."
+
+Example 3 - Currency (no HITL):
+User: "Convert 100 euros to dollars"
+Your thought: User wants currency conversion. I have currency_agent_convert tool. Extract params:
+  - amount: 100
+  - from_currency: "EUR"
+  - to_currency: "USD"
+Action: Call currency_agent_convert(amount=100, from_currency="EUR", to_currency="USD")
+Result: {amount: 100, from: "EUR", to: "USD", result: 115.2}
+Your response: "100 euros equals 115.2 dollars."
+
+Example 4 - Catalan (language consistency):
+User: "Envia un email a maria@example.com amb assumpte 'Hola' i cos 'Com estàs?'"
+Your thought: User wants email in Catalan. Extract params:
+  - to: "maria@example.com"
+  - subject: "Hola"
+  - body: "Com estàs?"
+Action: Call email_agent_send_email(to="maria@example.com", subject="Hola", body="Com estàs?")
+Result: {_hitl_required: true, ...}
+Your response (IN CATALAN): "He preparat l'email per a maria@example.com. Si us plau, confirma per enviar-lo."
+
+⚠️ HITL (Human-In-The-Loop) - HOW IT WORKS:
+- Some tools (like sending emails) require human confirmation for security
+- When you execute a tool that requires HITL, it will return {_hitl_required: true, ...}
+- The system automatically shows a confirmation card to the user
+- You should inform the user that confirmation is needed
+- DO NOT ask "Would you like me to proceed?" - the HITL card already does that
+- DO NOT try to re-execute the tool after user confirms - the system handles it
+- Simply acknowledge that the action is prepared and awaiting confirmation
+
+🚨 COMMON MISTAKES TO AVOID:
+❌ DON'T: Ask "Do you want me to send this email?" before executing the tool
+✅ DO: Execute the tool immediately, let HITL system handle confirmation
+
+❌ DON'T: Say "I need more information" when all params are in the user's message
+✅ DO: Extract params from natural language and execute the tool
+
+❌ DON'T: Wait for user confirmation before calling the tool
+✅ DO: Call the tool first, HITL system shows confirmation if needed
 
 When the user asks about specific documents, projects, or information:
 - ALWAYS use the `query_knowledge_base` tool to search for relevant information
@@ -146,26 +265,30 @@ When answering questions:
 - If you don't know something, say so clearly
 """
     
-    # If enable_a2a and no domain_agents provided, create default test agents
-    if enable_a2a and not domain_agents:
+    # If enable_a2a and no domain_agents AND no a2a_tools provided, create default test agents
+    # NOTE: If a2a_tools are provided (from config), we use tools instead of sub-agents
+    if enable_a2a and not domain_agents and not a2a_tools:
         from nodus_adk_agents.email_agent import build_email_agent
         from nodus_adk_agents.calendar_agent import build_calendar_agent
         
-        logger.info("No domain agents provided, creating default test agents for A2A")
+        logger.info("No domain agents or A2A tools provided, creating default test agents for A2A")
         domain_agents = [
             build_email_agent(),
             build_calendar_agent(),
         ]
         logger.info(f"Created {len(domain_agents)} default domain agents", 
                    agents=[a.name for a in domain_agents])
+    elif a2a_tools:
+        logger.info("A2A tools provided, skipping default domain agents creation")
     
     # Build agent with all tools and sub-agents for A2A
+    # Note: sub_agents must be a list (empty list if none), not None (Pydantic validation)
     root_agent = Agent(
         name="personal_assistant",
         instruction=instruction,
         model=config.get("model", "gemini-2.0-flash-exp"),
         tools=tools_list,
-        sub_agents=domain_agents if domain_agents else None,
+        sub_agents=domain_agents if domain_agents else [],
     )
     
     logger.info(
@@ -178,3 +301,4 @@ When answering questions:
         sub_agents_count=len(domain_agents) if domain_agents else 0,
     )
     return root_agent
+
