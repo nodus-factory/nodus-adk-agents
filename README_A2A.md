@@ -162,3 +162,4 @@ curl -X POST http://localhost:8001/a2a -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"get_forecast","params":{"city":"paris"},"id":3}'
 ```
 
+
