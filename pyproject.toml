@@ -11,6 +11,7 @@ dependencies = [
     "google-adk @ git+https://github.com/nodus-factory/adk-python.git@nodus-main",
     "pydantic>=2.5.0",
     "structlog>=23.2.0",
+    "litellm>=1.80.0",
 ]
 
 [project.optional-dependencies]

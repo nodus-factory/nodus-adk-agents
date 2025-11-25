@@ -68,24 +68,25 @@ def build_root_agent(
     # ========================================================================
     # Configure ADK to use LiteLLM proxy for ALL LLM calls
     # ========================================================================
+    # Official integration: https://docs.litellm.ai/docs/tutorials/google_adk
     # This ensures:
     # - All traces go to Langfuse (via LiteLLM)
     # - Cost tracking for all models
     # - Automatic fallbacks if primary model fails
     # - Unified access to OpenAI, Gemini, Claude, etc.
     
-    # Set OpenAI-compatible base URL to LiteLLM proxy
-    os.environ["OPENAI_API_BASE"] = config.get("openai_api_base", "http://litellm:4000/v1")
-    os.environ["OPENAI_API_KEY"] = config.get("openai_api_key", "sk-nodus-master-key")
+    import litellm
     
-    # ADK will use these env vars when making LLM calls
-    # Models like "gemini-2.0-flash-exp" will be routed through LiteLLM
-    # which knows how to proxy them to the actual providers
+    # Configure LiteLLM proxy (official method)
+    os.environ["LITELLM_PROXY_API_KEY"] = config.get("litellm_api_key", "sk-nodus-master-key")
+    os.environ["LITELLM_PROXY_API_BASE"] = config.get("litellm_api_base", "http://litellm:4000")
+    litellm.use_litellm_proxy = True
     
     logger.info(
-        "Building root agent with LiteLLM proxy",
+        "Building root agent with LiteLLM proxy (official integration)",
         model=config.get("model"),
-        api_base=os.environ.get("OPENAI_API_BASE"),
+        proxy_api_base=os.environ.get("LITELLM_PROXY_API_BASE"),
+        use_proxy=litellm.use_litellm_proxy,
     )
     
     # A2A tools should be loaded before calling this function (to avoid event loop issues)
@@ -333,10 +334,13 @@ When answering questions:
     
     # Build agent with all tools and sub-agents for A2A
     # Note: sub_agents must be a list (empty list if none), not None (Pydantic validation)
+    # Using LiteLlm wrapper for official LiteLLM proxy integration
+    from google.adk.models.lite_llm import LiteLlm
+    
     root_agent = Agent(
         name="personal_assistant",
         instruction=instruction,
-        model=config.get("model", "gemini-2.0-flash-exp"),
+        model=LiteLlm(model=config.get("model", "gemini-2.0-flash-exp")),
         tools=tools_list,
         sub_agents=domain_agents if domain_agents else [],
     )
