@@ -21,106 +21,15 @@ import structlog
 logger = structlog.get_logger()
 
 
-def build_root_agent(
-    mcp_adapter: Any,
-    memory_service: Any,
-    user_context: Any,
-    config: Dict[str, Any],
-    domain_agents: Optional[List[Any]] = None,
-    knowledge_tool: Optional[Any] = None,
-    enable_a2a: bool = True,
-    a2a_tools: Optional[List[Any]] = None,
-) -> Any:
-    """
-    Build the root Personal Assistant agent using Google ADK.
+# ============================================================================
+# HARDCODED FALLBACK INSTRUCTION
+# ============================================================================
+# This is used if Langfuse is unavailable or fails to load the prompt.
+# It's maintained here to ensure the system always has a working prompt.
+# To update: sync with Langfuse prompt "nodus-root-agent-instruction"
+# ============================================================================
 
-    Args:
-        mcp_adapter: MCP adapter for external tool integrations
-        memory_service: Memory service for RAG (QdrantMemoryService)
-        user_context: User context for authentication
-        config: Agent configuration (model, etc.)
-        domain_agents: Optional list of domain-specific sub-agents
-        knowledge_tool: Optional tool to query the knowledge base (documents)
-
-    Returns:
-        Configured ADK Agent instance
-
-    Example:
-        >>> from nodus_adk_runtime.adapters.mcp_adapter import MCPAdapter
-        >>> from nodus_adk_runtime.adapters.qdrant_memory_service import QdrantMemoryService
-        >>> from nodus_adk_runtime.middleware.auth import UserContext
-        >>> 
-        >>> mcp = MCPAdapter(gateway_url="http://mcp-gateway:7443")
-        >>> memory = QdrantMemoryService(qdrant_url="http://qdrant:6333")
-        >>> user_ctx = UserContext(...)
-        >>> 
-        >>> root = build_root_agent(
-        ...     mcp_adapter=mcp,
-        ...     memory_service=memory,
-        ...     user_context=user_ctx,
-        ...     config={"model": "gemini-2.0-flash-exp"}
-        ... )
-    """
-    from google.adk.agents.llm_agent import Agent
-    from google.adk.tools.load_memory_tool import load_memory
-    from nodus_adk_runtime.adapters.nodus_mcp_toolset import NodusMcpToolset
-    
-    # ========================================================================
-    # Configure ADK to use LiteLLM proxy for ALL LLM calls
-    # ========================================================================
-    # Official integration: https://docs.litellm.ai/docs/tutorials/google_adk
-    # This ensures:
-    # - All traces go to Langfuse (via LiteLLM)
-    # - Cost tracking for all models
-    # - Automatic fallbacks if primary model fails
-    # - Unified access to OpenAI, Gemini, Claude, etc.
-    
-    import litellm
-    
-    # Configure LiteLLM proxy (official method)
-    os.environ["LITELLM_PROXY_API_KEY"] = config.get("litellm_api_key", "sk-nodus-master-key")
-    os.environ["LITELLM_PROXY_API_BASE"] = config.get("litellm_api_base", "http://litellm:4000")
-    litellm.use_litellm_proxy = True
-    
-    logger.info(
-        "Building root agent with LiteLLM proxy (official integration)",
-        model=config.get("model"),
-        proxy_api_base=os.environ.get("LITELLM_PROXY_API_BASE"),
-        use_proxy=litellm.use_litellm_proxy,
-    )
-    
-    # A2A tools should be loaded before calling this function (to avoid event loop issues)
-    # They are passed as a parameter instead of being loaded here
-    if a2a_tools is None:
-        a2a_tools = []
-    
-    if a2a_tools:
-        logger.info(
-            "A2A tools received for root agent",
-            count=len(a2a_tools),
-            tools=[t.name if hasattr(t, 'name') else getattr(t, '__name__', str(t)) for t in a2a_tools],
-        )
-    
-    # Create MCP toolset
-    mcp_toolset = NodusMcpToolset(
-        mcp_adapter=mcp_adapter,
-        user_context=user_context,
-    )
-    
-    # Build tools list
-    tools_list = [mcp_toolset, load_memory]
-    
-    # Add knowledge base tool if provided
-    if knowledge_tool:
-        tools_list.append(knowledge_tool)
-        logger.info("Knowledge base tool added to agent")
-    
-    # Add A2A tools loaded from config
-    if a2a_tools:
-        tools_list.extend(a2a_tools)
-        logger.info("A2A tools added to agent", count=len(a2a_tools))
-    
-    instruction = """
+FALLBACK_INSTRUCTION = """
 You are a helpful personal assistant integrated with Nodus OS.
 
 🌍 LANGUAGE RULES (CRITICAL):
@@ -315,6 +224,155 @@ When answering questions:
 3. FINALLY: Provide accurate, helpful information combining memory + knowledge/delegation results
 - If you don't know something, say so clearly
 """
+
+
+def build_root_agent(
+    mcp_adapter: Any,
+    memory_service: Any,
+    user_context: Any,
+    config: Dict[str, Any],
+    domain_agents: Optional[List[Any]] = None,
+    knowledge_tool: Optional[Any] = None,
+    enable_a2a: bool = True,
+    a2a_tools: Optional[List[Any]] = None,
+) -> Any:
+    """
+    Build the root Personal Assistant agent using Google ADK.
+
+    Args:
+        mcp_adapter: MCP adapter for external tool integrations
+        memory_service: Memory service for RAG (QdrantMemoryService)
+        user_context: User context for authentication
+        config: Agent configuration (model, etc.)
+        domain_agents: Optional list of domain-specific sub-agents
+        knowledge_tool: Optional tool to query the knowledge base (documents)
+
+    Returns:
+        Configured ADK Agent instance
+
+    Example:
+        >>> from nodus_adk_runtime.adapters.mcp_adapter import MCPAdapter
+        >>> from nodus_adk_runtime.adapters.qdrant_memory_service import QdrantMemoryService
+        >>> from nodus_adk_runtime.middleware.auth import UserContext
+        >>> 
+        >>> mcp = MCPAdapter(gateway_url="http://mcp-gateway:7443")
+        >>> memory = QdrantMemoryService(qdrant_url="http://qdrant:6333")
+        >>> user_ctx = UserContext(...)
+        >>> 
+        >>> root = build_root_agent(
+        ...     mcp_adapter=mcp,
+        ...     memory_service=memory,
+        ...     user_context=user_ctx,
+        ...     config={"model": "gemini-2.0-flash-exp"}
+        ... )
+    """
+    from google.adk.agents.llm_agent import Agent
+    from google.adk.tools.load_memory_tool import load_memory
+    from nodus_adk_runtime.adapters.nodus_mcp_toolset import NodusMcpToolset
+    
+    # ========================================================================
+    # Configure ADK to use LiteLLM proxy for ALL LLM calls
+    # ========================================================================
+    # Official integration: https://docs.litellm.ai/docs/tutorials/google_adk
+    # This ensures:
+    # - All traces go to Langfuse (via LiteLLM)
+    # - Cost tracking for all models
+    # - Automatic fallbacks if primary model fails
+    # - Unified access to OpenAI, Gemini, Claude, etc.
+    
+    import litellm
+    
+    # Configure LiteLLM proxy (official method)
+    os.environ["LITELLM_PROXY_API_KEY"] = config.get("litellm_api_key", "sk-nodus-master-key")
+    os.environ["LITELLM_PROXY_API_BASE"] = config.get("litellm_api_base", "http://litellm:4000")
+    litellm.use_litellm_proxy = True
+    
+    logger.info(
+        "Building root agent with LiteLLM proxy (official integration)",
+        model=config.get("model"),
+        proxy_api_base=os.environ.get("LITELLM_PROXY_API_BASE"),
+        use_proxy=litellm.use_litellm_proxy,
+    )
+    
+    # A2A tools should be loaded before calling this function (to avoid event loop issues)
+    # They are passed as a parameter instead of being loaded here
+    if a2a_tools is None:
+        a2a_tools = []
+    
+    if a2a_tools:
+        logger.info(
+            "A2A tools received for root agent",
+            count=len(a2a_tools),
+            tools=[t.name if hasattr(t, 'name') else getattr(t, '__name__', str(t)) for t in a2a_tools],
+        )
+    
+    # Create MCP toolset
+    mcp_toolset = NodusMcpToolset(
+        mcp_adapter=mcp_adapter,
+        user_context=user_context,
+    )
+    
+    # Build tools list
+    tools_list = [mcp_toolset, load_memory]
+    
+    # Add knowledge base tool if provided
+    if knowledge_tool:
+        tools_list.append(knowledge_tool)
+        logger.info("Knowledge base tool added to agent")
+    
+    # Add A2A tools loaded from config
+    if a2a_tools:
+        tools_list.extend(a2a_tools)
+        logger.info("A2A tools added to agent", count=len(a2a_tools))
+    
+    # ========================================================================
+    # Load instruction from Langfuse with automatic fallback
+    # ========================================================================
+    try:
+        from nodus_adk_runtime.config import settings
+        from nodus_adk_runtime.services.prompt_service import PromptService
+        
+        # Initialize Prompt Service
+        prompt_service = PromptService(
+            langfuse_public_key=settings.langfuse_public_key,
+            langfuse_secret_key=settings.langfuse_secret_key,
+            langfuse_host=settings.langfuse_host,
+            enable_cache=True
+        )
+        
+        # Fetch instruction from Langfuse with fallback
+        instruction = prompt_service.get_prompt(
+            name="nodus-root-agent-instruction",
+            fallback=FALLBACK_INSTRUCTION,
+            label="production"  # or "staging" for A/B testing
+        )
+        
+        # Get metadata for logging
+        prompt_metadata = prompt_service.get_prompt_metadata(
+            name="nodus-root-agent-instruction",
+            label="production"
+        )
+        
+        logger.info(
+            "Root agent instruction loaded via PromptService",
+            prompt_name="nodus-root-agent-instruction",
+            prompt_source=prompt_metadata.get("source", "unknown"),
+            prompt_version=prompt_metadata.get("version", "unknown"),
+            prompt_label="production",
+            instruction_length=len(instruction),
+            instruction_lines=instruction.count('\n'),
+            cached=prompt_metadata.get("cached", False),
+            fallback_used=(prompt_metadata.get("source") == "fallback")
+        )
+        
+    except Exception as e:
+        # If PromptService import/initialization fails, use hardcoded fallback
+        logger.error(
+            "Failed to initialize PromptService, using hardcoded fallback",
+            error=str(e),
+            error_type=type(e).__name__
+        )
+        instruction = FALLBACK_INSTRUCTION
     
     # If enable_a2a and no domain_agents AND no a2a_tools provided, create default test agents
     # NOTE: If a2a_tools are provided (from config), we use tools instead of sub-agents
@@ -345,14 +403,27 @@ When answering questions:
         sub_agents=domain_agents if domain_agents else [],
     )
     
+    # Get final prompt metadata for logging
+    try:
+        final_prompt_metadata = prompt_service.get_prompt_metadata(
+            name="nodus-root-agent-instruction",
+            label="production"
+        )
+    except:
+        final_prompt_metadata = {"source": "fallback", "version": "hardcoded"}
+    
     logger.info(
         "Root agent built successfully",
         agent_name=root_agent.name,
+        model=config.get("model", "gemini-2.0-flash-exp"),
+        prompt_source=final_prompt_metadata.get("source", "unknown"),
+        prompt_version=final_prompt_metadata.get("version", "unknown"),
         has_mcp_toolset=True,
         has_memory_tool=True,
         has_knowledge_tool=bool(knowledge_tool),
         has_sub_agents=bool(domain_agents),
         sub_agents_count=len(domain_agents) if domain_agents else 0,
+        tools_count=len(tools_list)
     )
     return root_agent
 
