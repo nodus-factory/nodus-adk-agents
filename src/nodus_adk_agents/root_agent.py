@@ -6,9 +6,16 @@ The main orchestrator agent that:
 - Plans and delegates to domain agents
 - Manages A2A (Agent-to-Agent) communication
 - Composes final responses
+
+NOTE: ALL LLM calls are routed through LiteLLM proxy for:
+- Unified observability (Langfuse traces)
+- Cost tracking
+- Automatic fallbacks
+- Multi-provider support
 """
 
 from typing import Any, Dict, List, Optional
+import os
 import structlog
 
 logger = structlog.get_logger()
@@ -58,7 +65,28 @@ def build_root_agent(
     from google.adk.tools.load_memory_tool import load_memory
     from nodus_adk_runtime.adapters.nodus_mcp_toolset import NodusMcpToolset
     
-    logger.info("Building root agent", model=config.get("model"))
+    # ========================================================================
+    # Configure ADK to use LiteLLM proxy for ALL LLM calls
+    # ========================================================================
+    # This ensures:
+    # - All traces go to Langfuse (via LiteLLM)
+    # - Cost tracking for all models
+    # - Automatic fallbacks if primary model fails
+    # - Unified access to OpenAI, Gemini, Claude, etc.
+    
+    # Set OpenAI-compatible base URL to LiteLLM proxy
+    os.environ["OPENAI_API_BASE"] = config.get("openai_api_base", "http://litellm:4000/v1")
+    os.environ["OPENAI_API_KEY"] = config.get("openai_api_key", "sk-nodus-master-key")
+    
+    # ADK will use these env vars when making LLM calls
+    # Models like "gemini-2.0-flash-exp" will be routed through LiteLLM
+    # which knows how to proxy them to the actual providers
+    
+    logger.info(
+        "Building root agent with LiteLLM proxy",
+        model=config.get("model"),
+        api_base=os.environ.get("OPENAI_API_BASE"),
+    )
     
     # A2A tools should be loaded before calling this function (to avoid event loop issues)
     # They are passed as a parameter instead of being loaded here

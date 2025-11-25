@@ -12,9 +12,20 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from .a2a_observability import (
+    setup_observability,
+    trace_async_function,
+    add_span_event,
+    set_span_attribute,
+    instrument_fastapi_app,
+)
+
 logger = structlog.get_logger()
 
 app = FastAPI(title="Weather Agent A2A")
+
+# Setup OpenTelemetry + Langfuse observability
+setup_observability(service_name="weather_agent")
 
 # Open-Meteo API endpoint (free, no auth needed)
 OPEN_METEO_API = "https://api.open-meteo.com/v1/forecast"
@@ -29,6 +40,10 @@ CITY_COORDS = {
 }
 
 
+@trace_async_function(
+    name="get_weather_forecast",
+    attributes={"agent": "weather_agent", "provider": "Open-Meteo"}
+)
 async def get_weather_forecast(city: str, days: int = 1) -> Dict[str, Any]:
     """
     Get real weather forecast from Open-Meteo API
@@ -42,12 +57,20 @@ async def get_weather_forecast(city: str, days: int = 1) -> Dict[str, Any]:
     """
     city_lower = city.lower()
     
+    # Add span event
+    add_span_event("forecast_requested", {"city": city, "days": days})
+    
     if city_lower not in CITY_COORDS:
+        add_span_event("city_not_found", {"city": city})
         return {
             "error": f"City '{city}' not found. Available: {', '.join(CITY_COORDS.keys())}"
         }
     
     coords = CITY_COORDS[city_lower]
+    
+    # Log coordinates in span
+    set_span_attribute("geo.latitude", coords["lat"])
+    set_span_attribute("geo.longitude", coords["lon"])
     
     # Open-Meteo API parameters
     params = {
@@ -65,10 +88,14 @@ async def get_weather_forecast(city: str, days: int = 1) -> Dict[str, Any]:
     }
     
     try:
+        add_span_event("api_request_start", {"endpoint": OPEN_METEO_API})
+        
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(OPEN_METEO_API, params=params)
             response.raise_for_status()
             data = response.json()
+        
+        add_span_event("api_request_success", {"status_code": response.status_code})
         
         # Parse response
         daily = data["daily"]
@@ -111,6 +138,12 @@ async def get_weather_forecast(city: str, days: int = 1) -> Dict[str, Any]:
             }
             forecasts.append(forecast)
         
+        # Log forecast count in span
+        set_span_attribute("forecast.count", len(forecasts))
+        set_span_attribute("forecast.city", city)
+        
+        add_span_event("forecast_parsed", {"forecast_count": len(forecasts)})
+        
         return {
             "city": city,
             "forecasts": forecasts,
@@ -120,6 +153,7 @@ async def get_weather_forecast(city: str, days: int = 1) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error("Failed to fetch weather data", error=str(e), city=city)
+        add_span_event("api_request_failed", {"error": str(e)})
         return {"error": f"Failed to fetch weather: {str(e)}"}
 
 
@@ -231,6 +265,9 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Instrument FastAPI app
+    instrument_fastapi_app(app)
     
     logger.info("Starting Weather Agent A2A Server", port=8001)
     uvicorn.run(app, host="0.0.0.0", port=8001)

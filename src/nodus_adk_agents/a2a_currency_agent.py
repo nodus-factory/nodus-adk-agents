@@ -11,9 +11,20 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from .a2a_observability import (
+    setup_observability,
+    trace_async_function,
+    add_span_event,
+    set_span_attribute,
+    instrument_fastapi_app,
+)
+
 logger = structlog.get_logger()
 
 app = FastAPI(title="Currency Converter Agent A2A")
+
+# Setup OpenTelemetry + Langfuse observability
+setup_observability(service_name="currency_agent")
 
 # ExchangeRate-API endpoint (free, no auth needed, more stable than Frankfurter)
 EXCHANGE_API = "https://api.exchangerate-api.com/v4/latest"
@@ -26,6 +37,10 @@ SUPPORTED_CURRENCIES = [
 ]
 
 
+@trace_async_function(
+    name="get_exchange_rate",
+    attributes={"agent": "currency_agent", "provider": "ExchangeRate-API"}
+)
 async def get_exchange_rate(
     from_currency: str,
     to_currency: str,
@@ -45,6 +60,13 @@ async def get_exchange_rate(
     from_currency = from_currency.upper()
     to_currency = to_currency.upper()
     
+    # Add span event
+    add_span_event("exchange_rate_requested", {
+        "from": from_currency,
+        "to": to_currency,
+        "amount": amount
+    })
+    
     if from_currency not in SUPPORTED_CURRENCIES:
         return {
             "error": f"Currency '{from_currency}' not supported. Available: {', '.join(SUPPORTED_CURRENCIES[:10])}..."
@@ -56,11 +78,15 @@ async def get_exchange_rate(
         }
     
     try:
+        add_span_event("api_request_start", {"endpoint": EXCHANGE_API})
+        
         # ExchangeRate-API request (simpler, more stable)
         async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
             response = await client.get(f"{EXCHANGE_API}/{from_currency}")
             response.raise_for_status()
             data = response.json()
+        
+        add_span_event("api_request_success", {"status_code": response.status_code})
         
         # Parse response
         if to_currency not in data["rates"]:
@@ -68,6 +94,11 @@ async def get_exchange_rate(
         
         rate = data["rates"][to_currency]
         converted_amount = amount * rate
+        
+        # Log conversion details in span
+        set_span_attribute("exchange.rate", rate)
+        set_span_attribute("exchange.converted_amount", converted_amount)
+        add_span_event("conversion_completed", {"rate": rate, "result": converted_amount})
         
         return {
             "from_currency": from_currency,
@@ -90,6 +121,10 @@ async def get_exchange_rate(
         return {"error": f"Failed to fetch exchange rate: {str(e)}"}
 
 
+@trace_async_function(
+    name="convert_multiple",
+    attributes={"agent": "currency_agent", "provider": "ExchangeRate-API"}
+)
 async def convert_multiple(
     from_currency: str,
     to_currencies: List[str],
@@ -108,6 +143,12 @@ async def convert_multiple(
     """
     from_currency = from_currency.upper()
     to_currencies = [c.upper() for c in to_currencies]
+    
+    add_span_event("multiple_conversion_requested", {
+        "from": from_currency,
+        "to_count": len(to_currencies),
+        "amount": amount
+    })
     
     try:
         # ExchangeRate-API returns all rates, filter what we need
@@ -321,6 +362,9 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Instrument FastAPI app
+    instrument_fastapi_app(app)
     
     logger.info("Starting Currency Converter Agent A2A Server", port=8002)
     uvicorn.run(app, host="0.0.0.0", port=8002)

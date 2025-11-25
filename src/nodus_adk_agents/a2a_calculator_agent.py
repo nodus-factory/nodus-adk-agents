@@ -10,7 +10,18 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import math
 
+from .a2a_observability import (
+    setup_observability,
+    trace_function,
+    add_span_event,
+    set_span_attribute,
+    instrument_fastapi_app,
+)
+
 logger = structlog.get_logger()
+
+# Setup OpenTelemetry + Langfuse observability
+setup_observability(service_name="calculator_agent")
 
 # --- A2A Protocol Models ---
 class AgentCard(BaseModel):
@@ -78,11 +89,17 @@ CALCULATOR_AGENT_CARD = AgentCard(
 )
 
 # --- Helper Functions ---
+@trace_function(
+    name="safe_eval_expression",
+    attributes={"agent": "calculator_agent", "operation": "evaluation"}
+)
 def safe_eval_expression(expression: str) -> float:
     """
     Safely evaluate mathematical expressions
     Supports: +, -, *, /, **, sqrt, %, parentheses
     """
+    add_span_event("expression_received", {"expression": expression})
+    
     # Replace common mathematical notations
     expression = expression.replace("^", "**")  # Power
     expression = expression.replace("√", "sqrt")
@@ -113,8 +130,15 @@ def safe_eval_expression(expression: str) -> float:
     # Evaluate safely (no __builtins__ access)
     try:
         result = eval(expression, {"__builtins__": {}}, safe_dict)
-        return float(result)
+        float_result = float(result)
+        
+        # Log result in span
+        set_span_attribute("calculation.result", float_result)
+        add_span_event("calculation_completed", {"result": float_result})
+        
+        return float_result
     except Exception as e:
+        add_span_event("calculation_failed", {"error": str(e)})
         raise ValueError(f"Invalid expression: {str(e)}")
 
 # --- A2A Endpoints ---
@@ -175,6 +199,10 @@ async def handle_a2a_request(request: A2ARequest):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Instrument FastAPI app
+    instrument_fastapi_app(app)
+    
     logger.info("Starting A2A Calculator Agent", endpoint=CALCULATOR_AGENT_CARD.endpoint)
     uvicorn.run(app, host="0.0.0.0", port=8003)
 

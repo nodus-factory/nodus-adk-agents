@@ -42,15 +42,19 @@ async def multiply_with_confirmation(
     return {
         "status": "hitl_required",
         "action_type": "math_multiplication",
-        "action_description": f"Multiplicar {base_number} per {factor}",
+        "action_description": f"Multiplicar {base_number} per un número",
         "action_data": {
             "base_number": base_number,
-            "factor": factor,
+            "factor": factor,  # Default factor if user doesn't provide one
             "operation": "multiplication",
-            "expected_result": base_number * factor,
+            "input_type": "number",
         },
-        "question": f"Vols multiplicar {base_number} per {factor}?",
-        "preview": f"Operació: {base_number} × {factor} = {base_number * factor}",
+        "metadata": {
+            "tool": "request_user_input",
+            "input_type": "number"
+        },
+        "question": f"Per quin número vols multiplicar {base_number}?",
+        "preview": f"Multiplicació de {base_number}",
     }
 
 
