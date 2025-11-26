@@ -1,0 +1,46 @@
+{
+  "pool": {
+    "name": "nodus-core-agents",
+    "description": "Core A2A agents for Nodus OS",
+    "version": "1.0.0"
+  },
+  "agents": [
+    {
+      "name": "weather",
+      "module_path": "nodus_adk_agents.a2a_weather_agent",
+      "enabled": true,
+      "description": "Weather forecasts for cities",
+      "config": {
+        "cache_ttl": 300
+      }
+    },
+    {
+      "name": "currency",
+      "module_path": "nodus_adk_agents.a2a_currency_agent",
+      "enabled": true,
+      "description": "Currency conversion and rates",
+      "config": {
+        "update_interval": 3600
+      }
+    },
+    {
+      "name": "calculator",
+      "module_path": "nodus_adk_agents.a2a_calculator_agent",
+      "enabled": true,
+      "description": "Mathematical calculations"
+    },
+    {
+      "name": "email",
+      "module_path": "nodus_adk_agents.a2a_email_agent",
+      "enabled": true,
+      "description": "Email operations with HITL"
+    },
+    {
+      "name": "hitl_math",
+      "module_path": "nodus_adk_agents.a2a_hitl_math_agent",
+      "enabled": true,
+      "description": "Math operations with human confirmation"
+    }
+  ]
+}
+

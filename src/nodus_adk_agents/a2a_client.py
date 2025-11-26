@@ -140,7 +140,7 @@ class A2AClient:
         base_url = self.agent_endpoint.replace("/a2a", "")
         
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(base_url)
                 response.raise_for_status()
                 card = response.json()

@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install git (needed for pip to install from GitHub)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Copy source code and config first
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+COPY config/ ./config/
+
+# Install dependencies
+RUN pip install --no-cache-dir -e .
+
+# Expose single port for all agents
+EXPOSE 8000
+
+# Run pool manager
+CMD ["python", "-m", "nodus_adk_agents.agent_pool_manager", "config/agent_pool.json"]
+
