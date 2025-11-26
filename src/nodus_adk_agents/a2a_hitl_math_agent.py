@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+import os
 
 logger = structlog.get_logger()
 

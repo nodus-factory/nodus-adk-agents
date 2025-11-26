@@ -12,20 +12,35 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .a2a_observability import (
-    setup_observability,
-    trace_async_function,
-    add_span_event,
-    set_span_attribute,
-    instrument_fastapi_app,
-)
+try:
+    from .a2a_observability import (
+        setup_observability,
+        trace_async_function,
+        add_span_event,
+        set_span_attribute,
+        instrument_fastapi_app,
+    )
+except ImportError:
+    from .a2a_observability_stub import (
+        setup_observability,
+        trace_async_function,
+        add_span_event,
+        set_span_attribute,
+        instrument_fastapi_app,
+    )
 
 logger = structlog.get_logger()
 
 app = FastAPI(title="Weather Agent A2A")
 
 # Setup OpenTelemetry + Langfuse observability
-setup_observability(service_name="weather_agent")
+# Read from env vars for flexibility (works in pool or standalone)
+import os
+setup_observability(
+    service_name="weather_agent",
+    langfuse_host=os.getenv("LANGFUSE_HOST", "http://localhost:3000"),
+    otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+)
 
 # Open-Meteo API endpoint (free, no auth needed)
 OPEN_METEO_API = "https://api.open-meteo.com/v1/forecast"

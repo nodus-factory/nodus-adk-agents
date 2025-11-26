@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import structlog
 from datetime import datetime
+import os
 
 logger = structlog.get_logger()
 

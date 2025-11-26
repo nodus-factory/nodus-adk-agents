@@ -10,18 +10,33 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import math
 
-from .a2a_observability import (
-    setup_observability,
-    trace_function,
-    add_span_event,
-    set_span_attribute,
-    instrument_fastapi_app,
-)
+try:
+    from .a2a_observability import (
+        setup_observability,
+        trace_function,
+        add_span_event,
+        set_span_attribute,
+        instrument_fastapi_app,
+    )
+except ImportError:
+    from .a2a_observability_stub import (
+        setup_observability,
+        trace_function,
+        add_span_event,
+        set_span_attribute,
+        instrument_fastapi_app,
+    )
 
 logger = structlog.get_logger()
 
 # Setup OpenTelemetry + Langfuse observability
-setup_observability(service_name="calculator_agent")
+# Read from env vars for flexibility (works in pool or standalone)
+import os
+setup_observability(
+    service_name="calculator_agent",
+    langfuse_host=os.getenv("LANGFUSE_HOST", "http://localhost:3000"),
+    otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+)
 
 # --- A2A Protocol Models ---
 class AgentCard(BaseModel):
