@@ -315,6 +315,7 @@ def build_root_agent(
         user_context=user_context,
         server_id="b2brouter",
         tool_filter=['list_projects', 'list_contacts', 'create_invoice', 'send_invoice'],
+        tool_name_prefix="b2brouter_",
     )
     
     # OpenMemory - only essential memory tools  
@@ -323,6 +324,7 @@ def build_root_agent(
         user_context=user_context,
         server_id="openmemory",
         tool_filter=['store', 'query'],
+        tool_name_prefix="openmemory_",
     )
     
     # Filesystem - only safe read-only tools
@@ -331,6 +333,7 @@ def build_root_agent(
         user_context=user_context,
         server_id="filesystem",
         tool_filter=['read_file', 'list_directory'],
+        tool_name_prefix="filesystem_",
     )
     
     logger.info(
