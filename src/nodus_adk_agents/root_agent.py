@@ -306,14 +306,46 @@ def build_root_agent(
             tools=[t.name if hasattr(t, 'name') else getattr(t, '__name__', str(t)) for t in a2a_tools],
         )
     
-    # Create MCP toolset
-    mcp_toolset = NodusMcpToolset(
+    # Create MCP toolsets (one per server with tool_filter for Nadal version)
+    # Following ADK official McpToolset pattern with tool_filter
+    
+    # B2BRouter - only essential invoicing tools
+    b2brouter_toolset = NodusMcpToolset(
         mcp_adapter=mcp_adapter,
         user_context=user_context,
+        server_id="b2brouter",
+        tool_filter=['list_projects', 'list_contacts', 'create_invoice', 'send_invoice'],
+    )
+    
+    # OpenMemory - only essential memory tools  
+    openmemory_toolset = NodusMcpToolset(
+        mcp_adapter=mcp_adapter,
+        user_context=user_context,
+        server_id="openmemory",
+        tool_filter=['store', 'query'],
+    )
+    
+    # Filesystem - only safe read-only tools
+    filesystem_toolset = NodusMcpToolset(
+        mcp_adapter=mcp_adapter,
+        user_context=user_context,
+        server_id="filesystem",
+        tool_filter=['read_file', 'list_directory'],
+    )
+    
+    logger.info(
+        "MCP toolsets configured",
+        servers=["b2brouter", "openmemory", "filesystem"],
+        total_filtered_tools="8 (4+2+2)",
     )
     
     # Build tools list
-    tools_list = [mcp_toolset, load_memory]
+    tools_list = [
+        b2brouter_toolset,
+        openmemory_toolset,
+        filesystem_toolset,
+        load_memory
+    ]
     
     # Add knowledge base tool if provided
     if knowledge_tool:
