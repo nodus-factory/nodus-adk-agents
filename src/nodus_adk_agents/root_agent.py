@@ -335,11 +335,20 @@ def build_root_agent(
         tool_filter=['read_file', 'list_directory'],
         tool_name_prefix="filesystem_",
     )
+
+    # Google Workspace - full access (no filter)
+    google_toolset = NodusMcpToolset(
+        mcp_adapter=mcp_adapter,
+        user_context=user_context,
+        server_id="google-workspace",
+        tool_filter=None, # Expose ALL tools
+        tool_name_prefix="google_",
+    )
     
     logger.info(
         "MCP toolsets configured",
-        servers=["b2brouter", "openmemory", "filesystem"],
-        total_filtered_tools="8 (4+2+2)",
+        servers=["b2brouter", "openmemory", "filesystem", "google-workspace"],
+        total_filtered_tools="All Google + 8 others",
     )
     
     # Build tools list
@@ -347,6 +356,7 @@ def build_root_agent(
         b2brouter_toolset,
         openmemory_toolset,
         filesystem_toolset,
+        google_toolset,
         load_memory
     ]
     
