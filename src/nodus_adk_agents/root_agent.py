@@ -207,11 +207,21 @@ When the user asks about specific documents, projects, or information:
 - Examples: "què saps de l'anàlisi funcional de Segalés?", "tell me about the project report"
 - If `query_knowledge_base` returns "No relevant documents found", clearly inform the user that you don't have information about that topic in the knowledge base
 
+🛠️ WORKSPACE OPERATIONS (CRITICAL):
+For ANY Google Workspace request (Gmail, Calendar, Drive, Docs, Sheets):
+→ Use the workspace_task tool
+→ This tool handles context, memory, and complex multi-step operations
+→ Examples:
+  - "Busca emails del projecte X" → workspace_task(task="...", scope="gmail")
+  - "Què tinc a l'agenda avui?" → workspace_task(task="...", scope="calendar")
+  - "Busca el document del Pepe" → workspace_task(task="...", scope="drive")
+  - "Respon-li que sí" → workspace_task(task="...", scope="gmail")
+
 When you need to use external tools:
 - Use the available MCP tools through the gateway
-- Tools are organized by server (email, calendar, CRM, etc.)
+- Tools are organized by server (b2brouter, filesystem, etc.)
 - Always provide context about what you're doing
-- Tools are prefixed with "mcp_" to indicate they come from MCP Gateway
+- Tools are prefixed with server name to indicate their source
 
 🧠 MEMORY & CONTEXT RULES (CRITICAL):
 - At the START of EVERY conversation turn, ALWAYS call `load_memory` to recall recent context
@@ -327,48 +337,20 @@ def build_root_agent(
         tool_name_prefix="openmemory_",
     )
     
-    # Filesystem - only safe read-only tools
-    filesystem_toolset = NodusMcpToolset(
-        mcp_adapter=mcp_adapter,
-        user_context=user_context,
-        server_id="filesystem",
-        tool_filter=['read_file', 'list_directory'],
-        tool_name_prefix="filesystem_",
-    )
-
     # Google Workspace - full access (no filter)
     google_toolset = NodusMcpToolset(
         mcp_adapter=mcp_adapter,
         user_context=user_context,
         server_id="google-workspace",
-        tool_filter=None, # Expose ALL tools
+        tool_filter=None,  # Expose ALL tools
         tool_name_prefix="google_",
     )
     
     logger.info(
         "MCP toolsets configured",
-        servers=["b2brouter", "openmemory", "filesystem", "google-workspace"],
-        total_filtered_tools="All Google + 8 others",
+        servers=["b2brouter", "openmemory", "google-workspace"],
+        total_filtered_tools="6 filtered + 77 Google tools",
     )
-    
-    # Build tools list
-    tools_list = [
-        b2brouter_toolset,
-        openmemory_toolset,
-        filesystem_toolset,
-        google_toolset,
-        load_memory
-    ]
-    
-    # Add knowledge base tool if provided
-    if knowledge_tool:
-        tools_list.append(knowledge_tool)
-        logger.info("Knowledge base tool added to agent")
-    
-    # Add A2A tools loaded from config
-    if a2a_tools:
-        tools_list.extend(a2a_tools)
-        logger.info("A2A tools added to agent", count=len(a2a_tools))
     
     # ========================================================================
     # Load instruction from Langfuse with automatic fallback
@@ -418,6 +400,24 @@ def build_root_agent(
             error_type=type(e).__name__
         )
         instruction = FALLBACK_INSTRUCTION
+    
+    # Build tools list
+    tools_list = [
+        b2brouter_toolset,
+        openmemory_toolset,
+        google_toolset,
+        load_memory
+    ]
+    
+    # Add knowledge base tool if provided
+    if knowledge_tool:
+        tools_list.append(knowledge_tool)
+        logger.info("Knowledge base tool added to agent")
+    
+    # Add A2A tools loaded from config
+    if a2a_tools:
+        tools_list.extend(a2a_tools)
+        logger.info("A2A tools added to agent", count=len(a2a_tools))
     
     # If enable_a2a and no domain_agents AND no a2a_tools provided, create default test agents
     # NOTE: If a2a_tools are provided (from config), we use tools instead of sub-agents
