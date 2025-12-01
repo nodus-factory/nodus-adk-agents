@@ -242,6 +242,7 @@ def build_root_agent(
     user_context: Any,
     config: Dict[str, Any],
     domain_agents: Optional[List[Any]] = None,
+    memory_tool: Optional[Any] = None,
     knowledge_tool: Optional[Any] = None,
     enable_a2a: bool = True,
     a2a_tools: Optional[List[Any]] = None,
@@ -255,7 +256,8 @@ def build_root_agent(
         user_context: User context for authentication
         config: Agent configuration (model, etc.)
         domain_agents: Optional list of domain-specific sub-agents
-        knowledge_tool: Optional tool to query the knowledge base (documents)
+        memory_tool: Optional tool to query personal memory (CAPA 2)
+        knowledge_tool: Optional tool to query the knowledge base (documents, CAPA 3)
 
     Returns:
         Configured ADK Agent instance
@@ -328,15 +330,6 @@ def build_root_agent(
         tool_name_prefix="b2brouter_",
     )
     
-    # OpenMemory - only essential memory tools  
-    openmemory_toolset = NodusMcpToolset(
-        mcp_adapter=mcp_adapter,
-        user_context=user_context,
-        server_id="openmemory",
-        tool_filter=['store', 'query'],
-        tool_name_prefix="openmemory_",
-    )
-    
     # Google Workspace - full access (no filter)
     google_toolset = NodusMcpToolset(
         mcp_adapter=mcp_adapter,
@@ -348,8 +341,8 @@ def build_root_agent(
     
     logger.info(
         "MCP toolsets configured",
-        servers=["b2brouter", "openmemory", "google-workspace"],
-        total_filtered_tools="6 filtered + 77 Google tools",
+        servers=["b2brouter", "google-workspace"],
+        total_filtered_tools="4 B2BRouter + 77 Google tools",
     )
     
     # ========================================================================
@@ -404,15 +397,19 @@ def build_root_agent(
     # Build tools list
     tools_list = [
         b2brouter_toolset,
-        openmemory_toolset,
         google_toolset,
         load_memory
     ]
     
-    # Add knowledge base tool if provided
+    # Add memory tool if provided (CAPA 2: Semantic memory from Qdrant)
+    if memory_tool:
+        tools_list.append(memory_tool)
+        logger.info("Query memory tool added to agent (CAPA 2)")
+    
+    # Add knowledge base tool if provided (CAPA 3: Documents from Qdrant)
     if knowledge_tool:
         tools_list.append(knowledge_tool)
-        logger.info("Knowledge base tool added to agent")
+        logger.info("Knowledge base tool added to agent (CAPA 3)")
     
     # Add A2A tools loaded from config
     if a2a_tools:
