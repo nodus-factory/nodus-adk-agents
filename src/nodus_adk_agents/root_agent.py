@@ -244,6 +244,7 @@ def build_root_agent(
     domain_agents: Optional[List[Any]] = None,
     memory_tool: Optional[Any] = None,
     knowledge_tool: Optional[Any] = None,
+    pages_tool: Optional[Any] = None,
     enable_a2a: bool = True,
     a2a_tools: Optional[List[Any]] = None,
 ) -> Any:
@@ -258,6 +259,7 @@ def build_root_agent(
         domain_agents: Optional list of domain-specific sub-agents
         memory_tool: Optional tool to query personal memory (CAPA 2)
         knowledge_tool: Optional tool to query the knowledge base (documents, CAPA 3)
+        pages_tool: Optional tool to query page-specific documents (CAPA 4)
 
     Returns:
         Configured ADK Agent instance
@@ -321,12 +323,24 @@ def build_root_agent(
     # Create MCP toolsets (one per server with tool_filter for Nadal version)
     # Following ADK official McpToolset pattern with tool_filter
     
-    # B2BRouter - only essential invoicing tools
+    # B2BRouter - essential invoicing tools + query/download
     b2brouter_toolset = NodusMcpToolset(
         mcp_adapter=mcp_adapter,
         user_context=user_context,
         server_id="b2brouter",
-        tool_filter=['list_projects', 'list_contacts', 'create_invoice', 'send_invoice'],
+        tool_filter=[
+            'list_projects', 
+            'list_contacts',
+            'create_contact',      # Create new contacts
+            'get_contact',         # Get contact details
+            'update_contact',      # Update existing contacts
+            'create_invoice', 
+            'send_invoice',
+            'list_invoices',       # List all invoices
+            'get_invoice',         # Get invoice details
+            'download_invoice_pdf', # Download invoice PDF (not supported in staging)
+            'download_invoice_xml'  # Download invoice XML (UBL, FacturaE) - works in staging
+        ],
         tool_name_prefix="b2brouter_",
     )
     
@@ -342,7 +356,7 @@ def build_root_agent(
     logger.info(
         "MCP toolsets configured",
         servers=["b2brouter", "google-workspace"],
-        total_filtered_tools="4 B2BRouter + 77 Google tools",
+        total_filtered_tools="11 B2BRouter + 77 Google tools",
     )
     
     # ========================================================================
@@ -410,6 +424,11 @@ def build_root_agent(
     if knowledge_tool:
         tools_list.append(knowledge_tool)
         logger.info("Knowledge base tool added to agent (CAPA 3)")
+    
+    # Add pages tool if provided (CAPA 4: Page-specific documents from Qdrant)
+    if pages_tool:
+        tools_list.append(pages_tool)
+        logger.info("Query pages tool added to agent (CAPA 4)")
     
     # Add A2A tools loaded from config
     if a2a_tools:
