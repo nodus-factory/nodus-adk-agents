@@ -409,19 +409,21 @@ def build_root_agent(
         instruction = FALLBACK_INSTRUCTION
     
     # Build tools list
-    # Import generic HITL tool
-    from nodus_adk_runtime.tools.generic_hitl_tool import request_user_input_tool
+    # Import generic HITL tools
+    from nodus_adk_runtime.tools.generic_hitl_tool import request_user_input_tool, open_recorder_tool
     from nodus_adk_runtime.tools.current_datetime_tool import get_current_datetime_tool
     
     tools_list = [
         b2brouter_toolset,
         google_toolset,
         load_memory,
-        request_user_input_tool,  # Generic HITL tool using ADK ToolConfirmation
+        request_user_input_tool,  # Generic HITL tool using ADK ToolConfirmation (for user input)
+        open_recorder_tool,  # Generic HITL tool using ADK ToolConfirmation (for opening recorder PWA)
         get_current_datetime_tool,  # Current date/time tool for resolving relative dates
     ]
     
     logger.info("Generic HITL tool added to agent (request_user_input)")
+    logger.info("Recorder HITL tool added to agent (open_recorder)")
     logger.info("Current datetime tool added to agent (get_current_datetime)")
     
     # Add memory tool if provided (CAPA 2: Semantic memory from Qdrant)
