@@ -409,11 +409,17 @@ def build_root_agent(
         instruction = FALLBACK_INSTRUCTION
     
     # Build tools list
+    # Import generic HITL tool
+    from nodus_adk_runtime.tools.generic_hitl_tool import request_user_input_tool
+    
     tools_list = [
         b2brouter_toolset,
         google_toolset,
-        load_memory
+        load_memory,
+        request_user_input_tool,  # Generic HITL tool using ADK ToolConfirmation
     ]
+    
+    logger.info("Generic HITL tool added to agent (request_user_input)")
     
     # Add memory tool if provided (CAPA 2: Semantic memory from Qdrant)
     if memory_tool:
