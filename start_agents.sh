@@ -64,3 +64,4 @@ echo -e "🔍 Langfuse UI: http://localhost:3000\n"
 echo "💡 To stop all agents:"
 echo "   kill \$(lsof -ti :8001,:8002,:8003,:8004,:8005)"
 
+

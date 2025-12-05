@@ -49,3 +49,4 @@ def instrument_fastapi_app(app):
     """No-op FastAPI instrumentation"""
     pass
 
+

@@ -373,3 +373,4 @@ payment-agent:  # Agent crític individual
 - [ ] Agent versioning (v1, v2, etc.)
 - [ ] Dynamic scaling (add/remove agents runtime)
 
+
